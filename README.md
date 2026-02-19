@@ -4,7 +4,8 @@ Small, reusable scripts to bootstrap a fresh Linux VPS for development work.
 
 This repo is designed for a quick setup flow:
 1. Create a non-root sudo user and lock down SSH access.
-2. Install Docker tooling and common dependencies for container-based workflows.
+2. Configure Git + GitHub SSH access for that user.
+3. Install Docker tooling and common dependencies for container-based workflows.
 
 ## Scripts
 
@@ -21,7 +22,7 @@ What it does:
 - Validates and restarts the SSH service.
 - Copies this full repository directory to `/home/<username>/` and applies `chown -R <username>:<username>`.
 
-Run:
+Run as `root`:
 ```bash
 sudo bash setup_new_host.sh
 ```
@@ -42,7 +43,7 @@ What it does:
 - Installs `lazydocker` via Homebrew.
 - Runs post-install verification checks.
 
-Run:
+Run as your created non-root user:
 ```bash
 bash install_docker_stuff.sh
 ```
@@ -51,7 +52,24 @@ Notes:
 - Script is intended for Ubuntu/Linux Mint.
 - If Docker permission changes do not apply immediately, log out and back in.
 
+### `setup_git.sh`
+Purpose: configure Git identity and connect the server user to your GitHub account via SSH key.
+
+What it does:
+- Sets global `git` identity (`user.name`, `user.email`).
+- Generates an SSH key (`ed25519`) or reuses an existing one.
+- Adds the key to `ssh-agent`.
+- Adds a `github.com` entry to `~/.ssh/config` when missing.
+- Prints the public key and tells you exactly where to add it in GitHub.
+
+Run as your created non-root user:
+```bash
+bash setup_git.sh
+```
+
 ## Quick Start On a Brand New VPS
+
+### Phase 1: Run as `root` (or provider default admin user)
 
 Use HTTPS clone first (works without configuring a GitHub SSH key):
 
@@ -59,13 +77,19 @@ Use HTTPS clone first (works without configuring a GitHub SSH key):
 cd ~
 git clone https://github.com/vossiman/vps_setup.git
 cd vps_setup
+sudo bash setup_new_host.sh
 ```
 
-Then run setup in order:
+After `setup_new_host.sh` finishes:
+- keep the current session open
+- open a new SSH session as the created user (`ssh <username>@<server-ip>`)
+- go to the copied repo in that user's home: `cd ~/vps_setup`
+
+### Phase 2: Run as your created user (not root)
 
 ```bash
-sudo bash setup_new_host.sh
-# open a new SSH session as your new user
+cd ~/vps_setup
+bash setup_git.sh
 bash install_docker_stuff.sh
 ```
 
@@ -74,7 +98,8 @@ bash install_docker_stuff.sh
 1. Connect as root (or provider default admin user).
 2. Run `setup_new_host.sh` to create your real working user and secure SSH.
 3. Log in as the new user.
-4. Run `install_docker_stuff.sh`.
+4. Run `setup_git.sh` to connect this user to GitHub.
+5. Run `install_docker_stuff.sh`.
 
 ## Locale Warning Fix (If Needed)
 

@@ -377,6 +377,7 @@ show_final_instructions() {
     local username="$1"
     local repo_name="$2"
     local server_ip=$(hostname -I | awk '{print $1}')
+    local git_setup_script="/home/$username/$repo_name/setup_git.sh"
     local docker_script="/home/$username/$repo_name/install_docker_stuff.sh"
     
     echo
@@ -397,6 +398,7 @@ show_final_instructions() {
     echo
     print_info "Next Step:"
     print_info "  • After logging in as '$username', run:"
+    print_info "    bash $git_setup_script"
     print_info "    bash $docker_script"
     echo
     print_warning "🚨 IMPORTANT SECURITY NOTICE:"
