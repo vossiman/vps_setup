@@ -96,7 +96,7 @@ generate_or_reuse_key() {
         read -r -p "Reuse existing key instead of creating a new one? (Y/n): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-            echo "$key_path"
+            GENERATED_KEY_PATH="$key_path"
             return 0
         fi
         read -r -p "Overwrite existing key at $key_path? (y/N): " -n 1 -r
@@ -116,7 +116,7 @@ generate_or_reuse_key() {
         handle_error "Failed to generate SSH key"
     fi
 
-    echo "$key_path"
+    GENERATED_KEY_PATH="$key_path"
 }
 
 add_key_to_agent() {
@@ -196,7 +196,8 @@ main() {
     [[ -n "$key_email" ]] || handle_error "Email for SSH key comment is required"
 
     local key_path
-    key_path="$(generate_or_reuse_key "$key_email")"
+    generate_or_reuse_key "$key_email"
+    key_path="$GENERATED_KEY_PATH"
     add_key_to_agent "$key_path"
     ensure_ssh_config_entry "$key_path"
     show_next_steps "$key_path"
