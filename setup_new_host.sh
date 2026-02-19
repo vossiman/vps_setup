@@ -334,46 +334,50 @@ restart_ssh() {
     fi
 }
 
-# Function to copy Docker installer script to the target user home directory
-deploy_docker_installer() {
+# Function to copy entire repo into the target user home directory
+deploy_repo_to_user_home() {
     local username="$1"
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local source_script="$script_dir/install_docker_stuff.sh"
-    local target_script="/home/$username/install_docker_stuff.sh"
+    local source_repo_dir="$2"
+    local repo_name
+    repo_name="$(basename "$source_repo_dir")"
+    local target_repo_dir="/home/$username/$repo_name"
 
-    if [[ ! -f "$source_script" ]]; then
-        print_warning "install_docker_stuff.sh not found next to setup_new_host.sh"
-        print_warning "Skipping Docker installer copy step"
+    if [[ "$source_repo_dir" == "$target_repo_dir" ]]; then
+        print_info "Repository is already in $target_repo_dir"
         return 0
     fi
 
-    print_step "Copying Docker installer script to /home/$username..."
-
-    if cp "$source_script" "$target_script"; then
-        print_success "Copied install_docker_stuff.sh to $target_script"
-    else
-        handle_error "Failed to copy Docker installer script"
+    if [[ -e "$target_repo_dir" ]]; then
+        handle_error "Target path already exists: $target_repo_dir"
     fi
 
-    if chown "$username:$username" "$target_script"; then
-        print_success "Set ownership to $username:$username"
+    print_step "Copying repository to /home/$username/ ..."
+    if cp -a "$source_repo_dir" "/home/$username/"; then
+        print_success "Copied repository to $target_repo_dir"
     else
-        handle_error "Failed to set ownership on Docker installer script"
+        handle_error "Failed to copy repository to /home/$username/"
     fi
 
-    if chmod 700 "$target_script"; then
-        print_success "Set execute permissions for user on Docker installer script"
+    print_step "Setting ownership on repository..."
+    if chown -R "$username:$username" "$target_repo_dir"; then
+        print_success "Set ownership recursively to $username:$username"
     else
-        handle_error "Failed to set permissions on Docker installer script"
+        handle_error "Failed to set recursive ownership on $target_repo_dir"
+    fi
+
+    if chmod 700 "$target_repo_dir/install_docker_stuff.sh" 2>/dev/null; then
+        print_success "Ensured install_docker_stuff.sh is executable by $username"
+    else
+        print_warning "Could not set execute permission on install_docker_stuff.sh"
     fi
 }
 
 # Function to display final instructions
 show_final_instructions() {
     local username="$1"
+    local repo_name="$2"
     local server_ip=$(hostname -I | awk '{print $1}')
-    local docker_script="/home/$username/install_docker_stuff.sh"
+    local docker_script="/home/$username/$repo_name/install_docker_stuff.sh"
     
     echo
     echo "=================================="
@@ -409,6 +413,10 @@ show_final_instructions() {
 # Main function
 main() {
     local username=""
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+    local repo_name
+    repo_name="$(basename "$script_dir")"
 
     echo
     print_info "🚀 Starting Enhanced New Host Setup..."
@@ -468,12 +476,12 @@ main() {
     restart_ssh
     echo
 
-    # Copy Docker installer to target user home
-    deploy_docker_installer "$username"
+    # Copy repository into target user home and hand off ownership
+    deploy_repo_to_user_home "$username" "$script_dir"
     echo
     
     # Show final instructions
-    show_final_instructions "$username"
+    show_final_instructions "$username" "$repo_name"
 }
 
 # Script execution starts here

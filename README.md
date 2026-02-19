@@ -19,7 +19,7 @@ What it does:
 - Removes conflicting SSH auth settings from `/etc/ssh/sshd_config.d/*.conf` (if present).
 - Enforces secure SSH settings (no root login, key auth enabled, password auth disabled).
 - Validates and restarts the SSH service.
-- Copies `install_docker_stuff.sh` to `/home/<username>/` with user ownership and execute permission.
+- Copies this full repository directory to `/home/<username>/` and applies `chown -R <username>:<username>`.
 
 Run:
 ```bash
