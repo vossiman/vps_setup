@@ -50,12 +50,46 @@ Notes:
 - Script is intended for Ubuntu/Linux Mint.
 - If Docker permission changes do not apply immediately, log out and back in.
 
+### `get_locale.sh`
+Purpose: detect and repair missing configured locales (for warnings like `setlocale: ... cannot change locale`).
+
+What it does:
+- Reads configured locale values from `LANG`, `LC_ALL`, and `LC_*`.
+- Compares them against generated locales from `locale -a`.
+- If any configured locale is missing, installs `locales` (if needed), generates only missing locales, and updates system locale defaults.
+- If nothing is missing, exits without making changes.
+
+Run:
+```bash
+sudo bash get_locale.sh
+```
+
+## Quick Start On a Brand New VPS
+
+Use HTTPS clone first (works without configuring a GitHub SSH key):
+
+```bash
+cd ~
+git clone https://github.com/vossiman/vps_setup.git
+cd vps_setup
+```
+
+Then run setup in order:
+
+```bash
+sudo bash setup_new_host.sh
+# open a new SSH session as your new user
+sudo ./get_locale.sh   # optional, only if locale warnings appear
+bash install_docker_stuff.sh
+```
+
 ## Recommended Order On a Fresh VPS
 
 1. Connect as root (or provider default admin user).
 2. Run `setup_new_host.sh` to create your real working user and secure SSH.
 3. Log in as the new user.
-4. Run `install_docker_stuff.sh`.
+4. Optional: run `get_locale.sh` if you see locale warnings.
+5. Run `install_docker_stuff.sh`.
 
 ## Repository Goal
 
