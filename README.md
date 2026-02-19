@@ -54,7 +54,10 @@ Notes:
 Purpose: detect and repair missing configured locales (for warnings like `setlocale: ... cannot change locale`).
 
 What it does:
-- Reads configured locale values from `LANG`, `LC_ALL`, and `LC_*`.
+- Reads configured locale values from:
+  - current environment (`LANG`, `LC_ALL`, `LC_*`)
+  - `locale` output
+  - `/etc/default/locale`, `/etc/environment`, and shell profile files
 - Compares them against generated locales from `locale -a`.
 - If any configured locale is missing, installs `locales` (if needed), generates only missing locales, and updates system locale defaults.
 - If nothing is missing, exits without making changes.
@@ -62,6 +65,11 @@ What it does:
 Run:
 ```bash
 sudo bash get_locale.sh
+```
+
+Force-check a specific locale (optional):
+```bash
+sudo ./get_locale.sh de_AT.UTF-8
 ```
 
 ## Quick Start On a Brand New VPS

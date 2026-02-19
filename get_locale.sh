@@ -47,6 +47,27 @@ is_special_locale() {
     [[ "$value" == "c" || "$value" == "posix" ]]
 }
 
+extract_locales_from_file() {
+    local file="$1"
+    [[ -f "$file" ]] || return 0
+
+    awk '
+        /^[[:space:]]*#/ { next }
+        {
+            line=$0
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            sub(/^export[[:space:]]+/, "", line)
+            if (line ~ /^(LANG|LC_ALL|LC_[A-Z_]+)=/) {
+                split(line, kv, "=")
+                val=substr(line, length(kv[1]) + 2)
+                gsub(/^"|"$/, "", val)
+                gsub(/^'\''|'\''$/, "", val)
+                if (val != "") print val
+            }
+        }
+    ' "$file"
+}
+
 collect_configured_locales() {
     {
         locale 2>/dev/null | awk -F= '
@@ -55,8 +76,19 @@ collect_configured_locales() {
                 if ($2 != "") print $2
             }
         '
+        env | awk -F= '
+            /^(LANG|LC_ALL|LC_[A-Z_]+)=/ {
+                if ($2 != "") print $2
+            }
+        '
         [[ -n "${LC_ALL:-}" ]] && echo "$LC_ALL"
         [[ -n "${LANG:-}" ]] && echo "$LANG"
+        extract_locales_from_file "/etc/default/locale"
+        extract_locales_from_file "/etc/environment"
+        extract_locales_from_file "/root/.profile"
+        extract_locales_from_file "/root/.bashrc"
+        extract_locales_from_file "$HOME/.profile"
+        extract_locales_from_file "$HOME/.bashrc"
     } | awk 'NF' | sort -u
 }
 
@@ -100,6 +132,12 @@ main() {
     local configured_raw
     configured_raw="$(collect_configured_locales)"
 
+    # Optional explicit locale(s) as arguments:
+    # sudo ./get_locale.sh de_AT.UTF-8 en_US.UTF-8
+    if [[ $# -gt 0 ]]; then
+        configured_raw+=$'\n'"$(printf '%s\n' "$@")"
+    fi
+
     if [[ -z "$configured_raw" ]]; then
         print_warning "No configured locale variables found (LANG/LC_* are empty)."
         print_info "Nothing to repair."
@@ -129,7 +167,7 @@ main() {
     done
 
     if [[ ${#missing[@]} -eq 0 ]]; then
-        print_success "All configured locales are available. No changes needed."
+        print_success "All discovered locale settings are available. No changes needed."
         exit 0
     fi
 
