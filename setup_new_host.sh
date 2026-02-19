@@ -334,10 +334,46 @@ restart_ssh() {
     fi
 }
 
+# Function to copy Docker installer script to the target user home directory
+deploy_docker_installer() {
+    local username="$1"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local source_script="$script_dir/install_docker_stuff.sh"
+    local target_script="/home/$username/install_docker_stuff.sh"
+
+    if [[ ! -f "$source_script" ]]; then
+        print_warning "install_docker_stuff.sh not found next to setup_new_host.sh"
+        print_warning "Skipping Docker installer copy step"
+        return 0
+    fi
+
+    print_step "Copying Docker installer script to /home/$username..."
+
+    if cp "$source_script" "$target_script"; then
+        print_success "Copied install_docker_stuff.sh to $target_script"
+    else
+        handle_error "Failed to copy Docker installer script"
+    fi
+
+    if chown "$username:$username" "$target_script"; then
+        print_success "Set ownership to $username:$username"
+    else
+        handle_error "Failed to set ownership on Docker installer script"
+    fi
+
+    if chmod 700 "$target_script"; then
+        print_success "Set execute permissions for user on Docker installer script"
+    else
+        handle_error "Failed to set permissions on Docker installer script"
+    fi
+}
+
 # Function to display final instructions
 show_final_instructions() {
     local username="$1"
     local server_ip=$(hostname -I | awk '{print $1}')
+    local docker_script="/home/$username/install_docker_stuff.sh"
     
     echo
     echo "=================================="
@@ -354,6 +390,10 @@ show_final_instructions() {
     print_info "  • Username: $username"
     print_info "  • Server IP: $server_ip"
     print_info "  • SSH Command: ssh $username@$server_ip"
+    echo
+    print_info "Next Step:"
+    print_info "  • After logging in as '$username', run:"
+    print_info "    bash $docker_script"
     echo
     print_warning "🚨 IMPORTANT SECURITY NOTICE:"
     print_warning "  • Test the new SSH connection in a separate terminal"
@@ -426,6 +466,10 @@ main() {
     
     # Restart SSH service
     restart_ssh
+    echo
+
+    # Copy Docker installer to target user home
+    deploy_docker_installer "$username"
     echo
     
     # Show final instructions
