@@ -50,28 +50,6 @@ Notes:
 - Script is intended for Ubuntu/Linux Mint.
 - If Docker permission changes do not apply immediately, log out and back in.
 
-### `get_locale.sh`
-Purpose: detect and repair missing configured locales (for warnings like `setlocale: ... cannot change locale`).
-
-What it does:
-- Reads configured locale values from:
-  - current environment (`LANG`, `LC_ALL`, `LC_*`)
-  - `locale` output
-  - `/etc/default/locale`, `/etc/environment`, and shell profile files
-- Compares them against generated locales from `locale -a`.
-- If any configured locale is missing, installs `locales` (if needed), generates only missing locales, and updates system locale defaults.
-- If nothing is missing, exits without making changes.
-
-Run:
-```bash
-sudo bash get_locale.sh
-```
-
-Force-check a specific locale (optional):
-```bash
-sudo ./get_locale.sh de_AT.UTF-8
-```
-
 ## Quick Start On a Brand New VPS
 
 Use HTTPS clone first (works without configuring a GitHub SSH key):
@@ -87,7 +65,6 @@ Then run setup in order:
 ```bash
 sudo bash setup_new_host.sh
 # open a new SSH session as your new user
-sudo ./get_locale.sh   # optional, only if locale warnings appear
 bash install_docker_stuff.sh
 ```
 
@@ -96,8 +73,20 @@ bash install_docker_stuff.sh
 1. Connect as root (or provider default admin user).
 2. Run `setup_new_host.sh` to create your real working user and secure SSH.
 3. Log in as the new user.
-4. Optional: run `get_locale.sh` if you see locale warnings.
-5. Run `install_docker_stuff.sh`.
+4. Run `install_docker_stuff.sh`.
+
+## Locale Warning Fix (If Needed)
+
+If you see a warning like `setlocale: LC_ALL: cannot change locale`, generate the missing locale:
+
+```bash
+sudo apt update
+sudo apt install -y locales
+sudo locale-gen de_AT.UTF-8
+sudo update-locale LANG=de_AT.UTF-8
+```
+
+Then log out and reconnect.
 
 ## Repository Goal
 
