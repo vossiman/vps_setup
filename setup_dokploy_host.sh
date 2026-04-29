@@ -284,6 +284,49 @@ phase_ssh_harden() {
     fi
 }
 
+phase_fail2ban() {
+    print_step "Phase 4: Fail2Ban"
+
+    if ! command_exists fail2ban-client; then
+        print_step "Installing fail2ban..."
+        export DEBIAN_FRONTEND=noninteractive
+        if apt-get update >/dev/null && apt-get install -y fail2ban >/dev/null; then
+            print_success "fail2ban installed"
+        else
+            handle_error "Failed to install fail2ban"
+        fi
+    else
+        print_success "fail2ban already installed"
+    fi
+
+    local jail_file="/etc/fail2ban/jail.d/sshd.local"
+    print_step "Writing $jail_file..."
+    cat > "$jail_file" <<'EOF'
+[sshd]
+enabled = true
+port = ssh
+logpath = %(sshd_log)s
+backend = %(sshd_backend)s
+maxretry = 5
+findtime = 10m
+bantime = 10m
+EOF
+    print_success "Wrote sshd jail config"
+
+    if systemctl enable --now fail2ban >/dev/null 2>&1; then
+        print_success "fail2ban enabled and started"
+    else
+        handle_error "Failed to enable/start fail2ban"
+    fi
+
+    sleep 1
+    if systemctl is-active --quiet fail2ban; then
+        print_success "fail2ban service is active"
+    else
+        handle_error "fail2ban service did not start cleanly — check 'journalctl -u fail2ban'"
+    fi
+}
+
 main() {
     local SETUP_USERNAME=""
     local SSHD_BACKUP_FILE=""
@@ -298,6 +341,8 @@ main() {
     phase_ssh_key
     echo
     phase_ssh_harden
+    echo
+    phase_fail2ban
     echo
 }
 
