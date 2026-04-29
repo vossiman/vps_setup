@@ -175,8 +175,118 @@ phase_ssh_key() {
     print_success "Verified: SSH key written"
 }
 
+backup_ssh_config() {
+    local config_file="/etc/ssh/sshd_config"
+    local backup_file="/etc/ssh/sshd_config.backup.$(date +%Y%m%d_%H%M%S)"
+
+    if cp "$config_file" "$backup_file"; then
+        print_success "Backed up sshd_config to: $backup_file"
+        SSHD_BACKUP_FILE="$backup_file"
+    else
+        handle_error "Failed to back up sshd_config"
+    fi
+}
+
+handle_sshd_config_d() {
+    local config_dir="/etc/ssh/sshd_config.d"
+    local backup_dir="/etc/ssh/sshd_config.d.backup.$(date +%Y%m%d_%H%M%S)"
+
+    if [[ ! -d "$config_dir" ]]; then
+        print_info "No sshd_config.d directory found, skipping"
+        return 0
+    fi
+
+    print_step "Scrubbing conflicting settings from sshd_config.d/*.conf..."
+
+    if cp -r "$config_dir" "$backup_dir" 2>/dev/null; then
+        print_success "Backed up $config_dir to: $backup_dir"
+    fi
+
+    local conflicting_settings=(
+        "PasswordAuthentication"
+        "PubkeyAuthentication"
+        "PermitRootLogin"
+        "ChallengeResponseAuthentication"
+        "KbdInteractiveAuthentication"
+        "UsePAM"
+    )
+
+    local fixed_count=0
+    while IFS= read -r -d '' file; do
+        [[ -f "$file" ]] || continue
+        local filename
+        filename=$(basename "$file")
+        local has_conflicts=false
+        for setting in "${conflicting_settings[@]}"; do
+            if grep -qE "^[[:space:]]*$setting" "$file" 2>/dev/null; then
+                if [[ "$has_conflicts" == false ]]; then
+                    print_warning "Stripping conflicting settings from $filename"
+                    has_conflicts=true
+                    fixed_count=$((fixed_count + 1))
+                fi
+                sed -i "/^[[:space:]]*$setting/d" "$file"
+            fi
+        done
+    done < <(find "$config_dir" -type f -name "*.conf" -print0 2>/dev/null)
+
+    if [[ $fixed_count -gt 0 ]]; then
+        print_success "Scrubbed $fixed_count file(s) in sshd_config.d"
+    else
+        print_info "No conflicting settings in sshd_config.d"
+    fi
+}
+
+set_ssh_config() {
+    local setting="$1"
+    local value="$2"
+    local config_file="/etc/ssh/sshd_config"
+    sed -i "/^#*[[:space:]]*$setting/d" "$config_file"
+    echo "$setting $value" >> "$config_file"
+}
+
+phase_ssh_harden() {
+    print_step "Phase 3: Hardening SSH"
+
+    backup_ssh_config
+    handle_sshd_config_d
+
+    print_step "Writing hardened sshd_config..."
+    set_ssh_config "PasswordAuthentication"          "no"
+    set_ssh_config "PubkeyAuthentication"            "yes"
+    set_ssh_config "PermitRootLogin"                 "prohibit-password"
+    set_ssh_config "ChallengeResponseAuthentication" "no"
+    set_ssh_config "KbdInteractiveAuthentication"    "no"
+    set_ssh_config "UsePAM"                          "yes"
+    set_ssh_config "X11Forwarding"                   "no"
+    set_ssh_config "PrintMotd"                       "no"
+    set_ssh_config "AcceptEnv"                       "LANG LC_*"
+    set_ssh_config "Subsystem"                       "sftp /usr/lib/openssh/sftp-server"
+    print_success "Wrote hardened sshd_config"
+
+    print_step "Validating sshd_config syntax..."
+    if sshd -t; then
+        print_success "sshd config syntax valid"
+    else
+        handle_error "sshd -t failed — config invalid. NOT restarting sshd. Restore from $SSHD_BACKUP_FILE"
+    fi
+
+    print_step "Restarting ssh service..."
+    if systemctl restart ssh; then
+        print_success "ssh service restarted"
+    else
+        handle_error "Failed to restart ssh — restore from $SSHD_BACKUP_FILE"
+    fi
+    sleep 2
+    if systemctl is-active --quiet ssh; then
+        print_success "ssh service is running"
+    else
+        handle_error "ssh service is not running — restore from $SSHD_BACKUP_FILE"
+    fi
+}
+
 main() {
     local SETUP_USERNAME=""
+    local SSHD_BACKUP_FILE=""
 
     echo
     print_info "🚀 Starting Dokploy host setup..."
@@ -186,6 +296,8 @@ main() {
     phase_user
     echo
     phase_ssh_key
+    echo
+    phase_ssh_harden
     echo
 }
 
