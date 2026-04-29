@@ -106,6 +106,16 @@ phase_user() {
         handle_error "Failed to add '$username' to docker group (is the docker group present? Dokploy installs Docker which creates it)"
     fi
 
+    # Dokploy was installed as root; its server-health check inspects whether
+    # the install user (root) is in the docker group. Adding root to docker
+    # is a no-op for capabilities (root already has all privileges) but
+    # silences Dokploy's check.
+    if usermod -aG docker root; then
+        print_success "Added 'root' to docker group (satisfies Dokploy's check)"
+    else
+        print_warning "Could not add 'root' to docker group — Dokploy may continue to flag it"
+    fi
+
     if ! groups "$username" | grep -qw sudo; then
         handle_error "Verification failed: '$username' is not in sudo group"
     fi
@@ -307,12 +317,14 @@ phase_fail2ban() {
 
     local jail_file="/etc/fail2ban/jail.d/sshd.local"
     print_step "Writing $jail_file..."
+    # backend=systemd reads from journald (Ubuntu 24.04 no longer writes
+    # /var/log/auth.log by default). logpath is omitted because the
+    # systemd backend ignores it.
     cat > "$jail_file" <<'EOF'
 [sshd]
 enabled = true
 port = ssh
-logpath = %(sshd_log)s
-backend = %(sshd_backend)s
+backend = systemd
 maxretry = 5
 findtime = 10m
 bantime = 10m
