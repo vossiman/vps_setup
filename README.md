@@ -1,119 +1,65 @@
-# VPS Setup Scripts
+# VPS Setup Scripts (Dokploy edition)
 
-Small, reusable scripts to bootstrap a fresh Linux VPS for development work.
+Two scripts to harden a freshly Dokploy-installed Hetzner VPS:
 
-This repo is designed for a quick setup flow:
-1. Create a non-root sudo user and lock down SSH access.
-2. Configure Git + GitHub SSH access for that user.
-3. Install Docker tooling and common dependencies for container-based workflows.
+1. `setup_dokploy_host.sh` — runs as **root** after Dokploy is installed. Creates a non-root user with sudo + docker group, hardens SSH, installs UFW + Fail2Ban, copies this repo into the new user's home.
+2. `setup_git.sh` — optional, runs as the **non-root user**. Configures Git identity and a GitHub SSH key for occasional manual git work on the server.
 
-## Scripts
+## Prerequisites
 
-### `setup_new_host.sh`
-Purpose: create a new sudo user and configure SSH securely.
+- A Hetzner Cloud VPS provisioned with your root SSH key (via Hetzner UI).
+- Dokploy installed on that VPS (via Dokploy's UI/installer, run as root).
+- Ubuntu LTS or recent Debian.
 
-What it does:
-- Prompts for a username to create/configure.
-- Adds that user to the `sudo` group.
-- Prompts for an SSH public key and writes it to `~/.ssh/authorized_keys`.
-- Backs up `/etc/ssh/sshd_config`.
-- Removes conflicting SSH auth settings from `/etc/ssh/sshd_config.d/*.conf` (if present).
-- Enforces secure SSH settings (no root login, key auth enabled, password auth disabled).
-- Validates and restarts the SSH service.
-- Copies this full repository directory to `/home/<username>/` and applies `chown -R <username>:<username>`.
+## Usage
 
-Run as `root`:
-```bash
-sudo bash setup_new_host.sh
-```
+### Phase 1: as `root`
 
-Important:
-- Keep your current SSH session open while testing a new login.
-- Confirm key-based login works before closing the original root session.
-
-### `install_docker_stuff.sh`
-Purpose: install Docker stack and helper tooling for day-to-day dev.
-
-What it does:
-- Updates apt package lists.
-- Installs `build-essential` and `python3.12-venv`.
-- Installs Docker Engine + CLI + Compose plugin + Buildx.
-- Adds current user to the `docker` group.
-- Installs Homebrew (Linuxbrew) if missing.
-- Installs `lazydocker` via Homebrew.
-- Runs post-install verification checks.
-
-Run as your created non-root user:
-```bash
-bash install_docker_stuff.sh
-```
-
-Notes:
-- Script is intended for Ubuntu/Linux Mint.
-- If Docker permission changes do not apply immediately, log out and back in.
-
-### `setup_git.sh`
-Purpose: configure Git identity and connect the server user to your GitHub account via SSH key.
-
-What it does:
-- Sets global `git` identity (`user.name`, `user.email`).
-- Generates an SSH key (`ed25519`) or reuses an existing one.
-- Adds the key to `ssh-agent`.
-- Adds a `github.com` entry to `~/.ssh/config` when missing.
-- Prints the public key and tells you exactly where to add it in GitHub.
-
-Run as your created non-root user:
-```bash
-bash setup_git.sh
-```
-
-## Quick Start On a Brand New VPS
-
-### Phase 1: Run as `root` (or provider default admin user)
-
-Use HTTPS clone first (works without configuring a GitHub SSH key):
+After Dokploy install, SSH in as root, clone this repo, and run the host setup:
 
 ```bash
-cd ~
 git clone https://github.com/vossiman/vps_setup.git
 cd vps_setup
-sudo bash setup_new_host.sh
+bash setup_dokploy_host.sh
 ```
 
-After `setup_new_host.sh` finishes:
-- keep the current session open
-- open a new SSH session as the created user (`ssh <username>@<server-ip>`)
-- go to the copied repo in that user's home: `cd ~/vps_setup`
+You will be prompted for:
+- a username (default `vossi`)
+- a password for that user (used for `sudo`, not for SSH login)
+- your SSH public key (paste the contents of your `.pub` file)
 
-### Phase 2: Run as your created user (not root)
+The script then:
+- creates the user, adds it to `sudo` and `docker` groups
+- writes `/home/<user>/.ssh/authorized_keys`
+- backs up and rewrites `/etc/ssh/sshd_config` (PasswordAuth off, PermitRootLogin prohibit-password, etc.)
+- strips conflicting directives from `/etc/ssh/sshd_config.d/*.conf`
+- installs and enables Fail2Ban with a standard sshd jail
+- installs UFW, opens 22/tcp + 80/tcp + 443/tcp + 443/udp, and enables it
+- copies this repo into the new user's home
+
+**Test the new SSH login in a second terminal before closing the original session.** The script prints rollback instructions at the end in case anything goes wrong.
+
+### Phase 2: as the new user (optional)
+
+Only run this if you want to use git on the server (cloning a utility repo, inspecting compose files, etc.):
 
 ```bash
+ssh <user>@<server-ip>
 cd ~/vps_setup
 bash setup_git.sh
-bash install_docker_stuff.sh
 ```
 
-## Recommended Order On a Fresh VPS
+Sets your global git identity and generates an ed25519 SSH key for GitHub.
 
-1. Connect as root (or provider default admin user).
-2. Run `setup_new_host.sh` to create your real working user and secure SSH.
-3. Log in as the new user.
-4. Run `setup_git.sh` to connect this user to GitHub.
-5. Run `install_docker_stuff.sh`.
+## Re-running
 
-## Locale Warning Fix (If Needed)
+`setup_dokploy_host.sh` is idempotent. Re-running it after a Dokploy upgrade that re-enabled a setting (e.g. `PasswordAuthentication`) will re-assert the hardened state. Backups are timestamped so prior runs are preserved.
 
-If you see a warning like `setlocale: LC_ALL: cannot change locale`, generate the missing locale:
+## What's intentionally NOT here
 
-```bash
-sudo apt update
-sudo apt install -y locales
-sudo locale-gen de_AT.UTF-8
-sudo update-locale LANG=de_AT.UTF-8
-```
+- Docker installation — Dokploy handles it.
+- Homebrew / lazydocker / python3.12-venv — installed ad-hoc when actually needed.
+- The `chaifeng/ufw-docker` "Docker bypasses UFW" fix — incompatibilities with Docker Swarm and Dokploy's overlay network; not needed when apps stay behind Traefik on 80/443.
+- Custom SSH ports, aggressive Fail2Ban modes — security through obscurity / operator-lockout footguns.
 
-Then log out and reconnect.
-
-## Repository Goal
-
-Keep VPS initialization repeatable, fast, and safer than ad-hoc manual setup.
+See `docs/superpowers/specs/2026-04-29-dokploy-adaption-design.md` for the full design rationale.
