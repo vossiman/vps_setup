@@ -28,7 +28,7 @@ The repo is run in two phases on the target box:
 - `phase_deploy_repo()` — copy repo into the new user's home
 - `phase_summary()` — connection info + rollback hint
 
-Each phase is idempotent: re-running the script after a Dokploy upgrade that flipped a setting back will re-assert the hardened state.
+Every phase is idempotent except `phase_ssh_key`, which always prompts and overwrites `authorized_keys` (operator can Ctrl-C at the prompt to skip — preceding phases will have already completed).
 
 ## Non-obvious things to know
 

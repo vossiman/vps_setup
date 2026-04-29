@@ -53,7 +53,9 @@ Sets your global git identity and generates an ed25519 SSH key for GitHub.
 
 ## Re-running
 
-`setup_dokploy_host.sh` is idempotent. Re-running it after a Dokploy upgrade that re-enabled a setting (e.g. `PasswordAuthentication`) will re-assert the hardened state. Backups are timestamped so prior runs are preserved.
+`setup_dokploy_host.sh` is safe to re-run after a Dokploy upgrade that flipped a hardened setting back; it re-asserts the desired state and timestamped backups preserve prior runs.
+
+Caveat: the SSH-key prompt always runs and overwrites `~user/.ssh/authorized_keys` with the freshly pasted key. If you don't want to replace the key, hit Ctrl-C at the SSH-key prompt — earlier phases will already have completed.
 
 ## What's intentionally NOT here
 

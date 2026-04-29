@@ -120,7 +120,7 @@ phase_user() {
 
 validate_ssh_key() {
     local key="$1"
-    if [[ ! "$key" =~ ^ssh-(rsa|dss|ed25519|ecdsa) ]]; then
+    if [[ ! "$key" =~ ^(ssh-(rsa|dss|ed25519|ecdsa)|sk-(ssh-ed25519|ecdsa-sha2-nistp256))(@openssh\.com)? ]]; then
         return 1
     fi
     local parts_count
@@ -154,7 +154,7 @@ phase_ssh_key() {
         handle_error "No SSH key provided"
     fi
     if ! validate_ssh_key "$ssh_key"; then
-        handle_error "Invalid SSH key format. Keys should start with: ssh-rsa, ssh-ed25519, ssh-ecdsa, or ssh-dss"
+        handle_error "Invalid SSH key format. Expected one of: ssh-rsa, ssh-ed25519, ssh-ecdsa, ssh-dss, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com"
     fi
     print_success "SSH key format looks valid"
 
