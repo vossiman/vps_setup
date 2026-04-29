@@ -315,11 +315,14 @@ phase_fail2ban() {
         print_success "fail2ban already installed"
     fi
 
-    local jail_file="/etc/fail2ban/jail.d/sshd.local"
+    # Dokploy's server audit reads /etc/fail2ban/jail.local specifically
+    # (see Dokploy: packages/server/src/setup/server-audit.ts validateFail2ban).
+    # If we wrote to jail.d/sshd.local instead, fail2ban itself would honor
+    # it but Dokploy's UI would still report SSH Protection as disabled.
+    # backend=systemd reads from journald (Ubuntu 24.04+ stopped writing
+    # /var/log/auth.log by default).
+    local jail_file="/etc/fail2ban/jail.local"
     print_step "Writing $jail_file..."
-    # backend=systemd reads from journald (Ubuntu 24.04 no longer writes
-    # /var/log/auth.log by default). logpath is omitted because the
-    # systemd backend ignores it.
     cat > "$jail_file" <<'EOF'
 [sshd]
 enabled = true
@@ -330,6 +333,14 @@ findtime = 10m
 bantime = 10m
 EOF
     print_success "Wrote sshd jail config"
+
+    # Remove the legacy jail.d/sshd.local from prior runs of this script.
+    # Both files defining [sshd] would work for fail2ban (no conflict), but
+    # a single source of truth is cleaner.
+    if [[ -f /etc/fail2ban/jail.d/sshd.local ]]; then
+        rm -f /etc/fail2ban/jail.d/sshd.local
+        print_info "Removed legacy /etc/fail2ban/jail.d/sshd.local"
+    fi
 
     if systemctl enable --now fail2ban >/dev/null 2>&1; then
         print_success "fail2ban enabled and started"
