@@ -412,6 +412,44 @@ phase_deploy_repo() {
     DEPLOYED_REPO_DIR="$target_repo_dir"
 }
 
+phase_summary() {
+    local server_ip
+    server_ip=$(hostname -I | awk '{print $1}')
+
+    echo
+    echo "======================================================================"
+    print_success "🎉 Dokploy host setup complete"
+    echo "======================================================================"
+    echo
+    print_info "User"
+    print_info "  • Username:      $SETUP_USERNAME"
+    print_info "  • Groups:        sudo, docker"
+    print_info "  • SSH key:       installed in /home/$SETUP_USERNAME/.ssh/authorized_keys"
+    echo
+    print_info "SSH"
+    print_info "  • PasswordAuthentication: disabled"
+    print_info "  • PubkeyAuthentication:   enabled"
+    print_info "  • PermitRootLogin:        prohibit-password (root key still works)"
+    print_info "  • Backup of old config:   $SSHD_BACKUP_FILE"
+    echo
+    print_info "Firewall + Fail2Ban"
+    print_info "  • UFW:        active (22/tcp, 80/tcp, 443/tcp, 443/udp)"
+    print_info "  • Fail2Ban:   active (sshd jail, 5 fails / 10 min / 10 min ban)"
+    echo
+    print_info "Connection details"
+    print_info "  • SSH:        ssh $SETUP_USERNAME@$server_ip"
+    if [[ -n "$DEPLOYED_REPO_DIR" ]]; then
+        print_info "  • Optional:   bash $DEPLOYED_REPO_DIR/setup_git.sh   (run as $SETUP_USERNAME)"
+    fi
+    echo
+    print_warning "🚨 Test the new login in a SECOND terminal before closing this one."
+    echo
+    print_info "If the new SSH login fails, restore the old sshd_config:"
+    print_info "  cp $SSHD_BACKUP_FILE /etc/ssh/sshd_config && systemctl restart ssh"
+    print_info "If you ever need to disable UFW from this session:  ufw disable"
+    echo
+}
+
 main() {
     local SETUP_USERNAME=""
     local SSHD_BACKUP_FILE=""
@@ -434,6 +472,7 @@ main() {
     echo
     phase_deploy_repo
     echo
+    phase_summary
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
