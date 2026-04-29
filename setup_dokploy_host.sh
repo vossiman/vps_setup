@@ -209,6 +209,10 @@ handle_sshd_config_d() {
         "ChallengeResponseAuthentication"
         "KbdInteractiveAuthentication"
         "UsePAM"
+        "X11Forwarding"
+        "PrintMotd"
+        "AcceptEnv"
+        "Subsystem"
     )
 
     local fixed_count=0
@@ -218,13 +222,13 @@ handle_sshd_config_d() {
         filename=$(basename "$file")
         local has_conflicts=false
         for setting in "${conflicting_settings[@]}"; do
-            if grep -qE "^[[:space:]]*$setting" "$file" 2>/dev/null; then
+            if grep -qE "^[[:space:]]*${setting}([[:space:]]|$)" "$file" 2>/dev/null; then
                 if [[ "$has_conflicts" == false ]]; then
                     print_warning "Stripping conflicting settings from $filename"
                     has_conflicts=true
                     fixed_count=$((fixed_count + 1))
                 fi
-                sed -i "/^[[:space:]]*$setting/d" "$file"
+                sed -i -E "/^[[:space:]]*${setting}([[:space:]]|$)/d" "$file"
             fi
         done
     done < <(find "$config_dir" -type f -name "*.conf" -print0 2>/dev/null)
@@ -240,7 +244,7 @@ set_ssh_config() {
     local setting="$1"
     local value="$2"
     local config_file="/etc/ssh/sshd_config"
-    sed -i "/^#*[[:space:]]*$setting/d" "$config_file"
+    sed -i -E "/^#*[[:space:]]*${setting}([[:space:]]|$)/d" "$config_file"
     echo "$setting $value" >> "$config_file"
 }
 
@@ -290,11 +294,13 @@ phase_fail2ban() {
     if ! command_exists fail2ban-client; then
         print_step "Installing fail2ban..."
         export DEBIAN_FRONTEND=noninteractive
-        if apt-get update >/dev/null && apt-get install -y fail2ban >/dev/null; then
-            print_success "fail2ban installed"
-        else
-            handle_error "Failed to install fail2ban"
+        if ! apt-get update >/dev/null; then
+            handle_error "apt-get update failed (see stderr for details)"
         fi
+        if ! apt-get install -y fail2ban >/dev/null; then
+            handle_error "Failed to install fail2ban (see stderr for details)"
+        fi
+        print_success "fail2ban installed"
     else
         print_success "fail2ban already installed"
     fi
@@ -333,11 +339,13 @@ phase_ufw() {
     if ! command_exists ufw; then
         print_step "Installing ufw..."
         export DEBIAN_FRONTEND=noninteractive
-        if apt-get install -y ufw >/dev/null; then
-            print_success "ufw installed"
-        else
-            handle_error "Failed to install ufw"
+        if ! apt-get update >/dev/null; then
+            handle_error "apt-get update failed (see stderr for details)"
         fi
+        if ! apt-get install -y ufw >/dev/null; then
+            handle_error "Failed to install ufw (see stderr for details)"
+        fi
+        print_success "ufw installed"
     else
         print_success "ufw already installed"
     fi
