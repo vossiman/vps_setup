@@ -31,8 +31,43 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+preflight() {
+    print_step "Preflight checks..."
+
+    if [[ $EUID -ne 0 ]]; then
+        handle_error "This script must be run as root (use sudo)"
+    fi
+    print_success "Running as root"
+
+    if [[ ! -f /etc/os-release ]]; then
+        handle_error "/etc/os-release not found — cannot detect OS"
+    fi
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    case "${ID:-}" in
+        ubuntu|debian)
+            print_success "Detected supported OS: ${PRETTY_NAME:-$ID}"
+            ;;
+        *)
+            handle_error "Unsupported OS: ${PRETTY_NAME:-$ID}. This script targets Ubuntu/Debian."
+            ;;
+    esac
+
+    if [[ -d /etc/dokploy ]] && command_exists docker; then
+        print_success "Dokploy environment detected (/etc/dokploy + docker)"
+    else
+        print_warning "Dokploy not detected (/etc/dokploy missing or 'docker' not on PATH)"
+        print_warning "This script is intended to run AFTER Dokploy installation."
+        print_warning "It will continue, but Dokploy-specific verifications will not run."
+    fi
+}
+
 main() {
-    print_info "Skeleton — phases not yet implemented."
+    echo
+    print_info "🚀 Starting Dokploy host setup..."
+    echo
+    preflight
+    echo
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
