@@ -118,6 +118,63 @@ phase_user() {
     SETUP_USERNAME="$username"
 }
 
+validate_ssh_key() {
+    local key="$1"
+    if [[ ! "$key" =~ ^ssh-(rsa|dss|ed25519|ecdsa) ]]; then
+        return 1
+    fi
+    local parts_count
+    parts_count=$(echo "$key" | wc -w)
+    if [[ $parts_count -lt 2 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+phase_ssh_key() {
+    print_step "Phase 2: SSH public key for '$SETUP_USERNAME'"
+
+    local home_dir="/home/$SETUP_USERNAME"
+    local ssh_dir="$home_dir/.ssh"
+    local auth_keys="$ssh_dir/authorized_keys"
+    local ssh_key=""
+
+    echo
+    echo "═══════════════════════════════════════════════════════════════════════════════"
+    print_info "PURPOSE: Enable passwordless SSH login for '$SETUP_USERNAME'"
+    print_info "KEY TYPE: Paste your SSH PUBLIC KEY (the .pub file, NOT the private key)"
+    echo "═══════════════════════════════════════════════════════════════════════════════"
+    echo
+    print_step "👉 PASTE YOUR SSH PUBLIC KEY NOW (then press Enter):"
+    echo
+    printf "> "
+    read -r ssh_key
+
+    if [[ -z "$ssh_key" ]]; then
+        handle_error "No SSH key provided"
+    fi
+    if ! validate_ssh_key "$ssh_key"; then
+        handle_error "Invalid SSH key format. Keys should start with: ssh-rsa, ssh-ed25519, ssh-ecdsa, or ssh-dss"
+    fi
+    print_success "SSH key format looks valid"
+
+    sudo -u "$SETUP_USERNAME" mkdir -p "$ssh_dir"     || handle_error "Failed to create $ssh_dir"
+    sudo -u "$SETUP_USERNAME" chmod 700 "$ssh_dir"    || handle_error "Failed to chmod 700 $ssh_dir"
+    sudo -u "$SETUP_USERNAME" touch "$auth_keys"      || handle_error "Failed to create $auth_keys"
+    sudo -u "$SETUP_USERNAME" chmod 600 "$auth_keys"  || handle_error "Failed to chmod 600 $auth_keys"
+
+    if echo "$ssh_key" | sudo -u "$SETUP_USERNAME" tee "$auth_keys" > /dev/null; then
+        print_success "Wrote authorized_keys for '$SETUP_USERNAME'"
+    else
+        handle_error "Failed to write authorized_keys"
+    fi
+
+    if ! sudo -u "$SETUP_USERNAME" grep -q '^ssh-' "$auth_keys"; then
+        handle_error "Verification failed: no SSH key in $auth_keys"
+    fi
+    print_success "Verified: SSH key written"
+}
+
 main() {
     local SETUP_USERNAME=""
 
@@ -127,6 +184,8 @@ main() {
     preflight
     echo
     phase_user
+    echo
+    phase_ssh_key
     echo
 }
 
