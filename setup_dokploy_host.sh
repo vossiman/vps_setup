@@ -327,6 +327,50 @@ EOF
     fi
 }
 
+phase_ufw() {
+    print_step "Phase 5: UFW firewall"
+
+    if ! command_exists ufw; then
+        print_step "Installing ufw..."
+        export DEBIAN_FRONTEND=noninteractive
+        if apt-get install -y ufw >/dev/null; then
+            print_success "ufw installed"
+        else
+            handle_error "Failed to install ufw"
+        fi
+    else
+        print_success "ufw already installed"
+    fi
+
+    print_step "Setting default policies..."
+    ufw default deny incoming  >/dev/null || handle_error "Failed: ufw default deny incoming"
+    ufw default allow outgoing >/dev/null || handle_error "Failed: ufw default allow outgoing"
+    print_success "Defaults: deny incoming, allow outgoing"
+
+    print_step "Adding allow rules (SSH first, before enabling)..."
+    ufw allow 22/tcp  comment 'SSH'                       >/dev/null || handle_error "Failed: allow 22/tcp"
+    ufw allow 80/tcp  comment 'HTTP / Traefik'            >/dev/null || handle_error "Failed: allow 80/tcp"
+    ufw allow 443/tcp comment 'HTTPS / Traefik'           >/dev/null || handle_error "Failed: allow 443/tcp"
+    ufw allow 443/udp comment 'HTTP/3 (QUIC) / Traefik'   >/dev/null || handle_error "Failed: allow 443/udp"
+    print_success "Rules added: 22/tcp, 80/tcp, 443/tcp, 443/udp"
+
+    print_step "Enabling ufw..."
+    if ufw --force enable >/dev/null; then
+        print_success "ufw enabled"
+    else
+        handle_error "Failed to enable ufw"
+    fi
+
+    if systemctl is-active --quiet ufw; then
+        print_success "ufw service is active"
+    else
+        print_warning "ufw service not reported active by systemctl — verify with 'ufw status'"
+    fi
+
+    print_info "Current ufw status:"
+    ufw status verbose
+}
+
 main() {
     local SETUP_USERNAME=""
     local SSHD_BACKUP_FILE=""
@@ -343,6 +387,8 @@ main() {
     phase_ssh_harden
     echo
     phase_fail2ban
+    echo
+    phase_ufw
     echo
 }
 
