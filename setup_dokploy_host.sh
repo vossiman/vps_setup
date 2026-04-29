@@ -371,9 +371,51 @@ phase_ufw() {
     ufw status verbose
 }
 
+phase_deploy_repo() {
+    print_step "Phase 6: Copy repo to /home/$SETUP_USERNAME/"
+
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+    local repo_name
+    repo_name="$(basename "$script_dir")"
+    local target_repo_dir="/home/$SETUP_USERNAME/$repo_name"
+
+    if [[ "$script_dir" == "$target_repo_dir" ]]; then
+        print_info "Repository is already at $target_repo_dir, nothing to do"
+        DEPLOYED_REPO_DIR="$target_repo_dir"
+        return 0
+    fi
+
+    if [[ -e "$target_repo_dir" ]]; then
+        print_warning "Target already exists: $target_repo_dir"
+        print_warning "Skipping deploy. To re-deploy: rm -rf $target_repo_dir, then re-run."
+        DEPLOYED_REPO_DIR="$target_repo_dir"
+        return 0
+    fi
+
+    if cp -a "$script_dir" "/home/$SETUP_USERNAME/"; then
+        print_success "Copied repo to $target_repo_dir"
+    else
+        handle_error "Failed to copy repo"
+    fi
+
+    if chown -R "$SETUP_USERNAME:$SETUP_USERNAME" "$target_repo_dir"; then
+        print_success "chowned $target_repo_dir to $SETUP_USERNAME:$SETUP_USERNAME"
+    else
+        handle_error "Failed to chown $target_repo_dir"
+    fi
+
+    chmod 700 "$target_repo_dir/setup_git.sh" 2>/dev/null && \
+        print_success "setup_git.sh is executable" || \
+        print_warning "Could not chmod setup_git.sh (file may be missing)"
+
+    DEPLOYED_REPO_DIR="$target_repo_dir"
+}
+
 main() {
     local SETUP_USERNAME=""
     local SSHD_BACKUP_FILE=""
+    local DEPLOYED_REPO_DIR=""
 
     echo
     print_info "🚀 Starting Dokploy host setup..."
@@ -389,6 +431,8 @@ main() {
     phase_fail2ban
     echo
     phase_ufw
+    echo
+    phase_deploy_repo
     echo
 }
 
