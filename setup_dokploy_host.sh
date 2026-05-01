@@ -78,7 +78,9 @@ phase_user() {
 
     if id "$username" &>/dev/null; then
         print_success "User '$username' already exists"
+        SETUP_USER_PREEXISTED=true
     else
+        SETUP_USER_PREEXISTED=false
         if adduser --disabled-password --gecos "" "$username"; then
             print_success "User '$username' created"
         else
@@ -143,6 +145,15 @@ validate_ssh_key() {
 
 phase_ssh_key() {
     print_step "Phase 2: SSH public key for '$SETUP_USERNAME'"
+
+    if [[ "$SETUP_USER_PREEXISTED" == true ]]; then
+        print_info "User '$SETUP_USERNAME' pre-existed — assuming SSH key is already configured."
+        print_info "Skipping SSH key install. To force re-install, remove the user (or"
+        print_info "  ~/.ssh/authorized_keys) and re-run this script."
+        SETUP_SSH_KEY_INSTALLED=false
+        return 0
+    fi
+    SETUP_SSH_KEY_INSTALLED=true
 
     local home_dir="/home/$SETUP_USERNAME"
     local ssh_dir="$home_dir/.ssh"
@@ -455,7 +466,11 @@ phase_summary() {
     print_info "User"
     print_info "  • Username:      $SETUP_USERNAME"
     print_info "  • Groups:        sudo, docker"
-    print_info "  • SSH key:       installed in /home/$SETUP_USERNAME/.ssh/authorized_keys"
+    if [[ "$SETUP_SSH_KEY_INSTALLED" == true ]]; then
+        print_info "  • SSH key:       installed in /home/$SETUP_USERNAME/.ssh/authorized_keys"
+    else
+        print_info "  • SSH key:       skipped (user pre-existed; assumed already configured)"
+    fi
     echo
     print_info "SSH"
     print_info "  • PasswordAuthentication: disabled"
@@ -483,6 +498,8 @@ phase_summary() {
 
 main() {
     local SETUP_USERNAME=""
+    local SETUP_USER_PREEXISTED=false
+    local SETUP_SSH_KEY_INSTALLED=false
     local SSHD_BACKUP_FILE=""
     local DEPLOYED_REPO_DIR=""
 
